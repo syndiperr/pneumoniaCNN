@@ -1,0 +1,40 @@
+Convolutional Neural Network
+
+https://www.youtube.com/watch?v=umGJ30-15_A
+
+CNNs use a variation of multilayer perceptrons designed to require minimal preprocessing.
+They are also known as shift invariant or space invariant artificial neural networks (SIANN), based on their shared-weights architecture and translation invariance characteristics
+
+They have these layers
+    1. Convolution
+        - Take small patches of image
+        - look for similarities in images
+        - 1. Line up the feature and image
+        - 2. Mulitply each image pixel by the corresponding
+             Feature pixel
+        - 3. Add all values, divide by number of pixel
+            - Place the value in the center of filter
+        - Do this for all the filters
+        - Will get an "image" of the Convolution layer output
+
+    2. ReLU Layer - Rectified Linear Unit 
+        - Remove every negative value from filtered image and replaces with zeros
+        - This is done to avoid summing up to ZERO
+        - Activation function x<0 fx=0 , x>=0 fx=x
+        - Will take the output for the feature and apply ReLU
+          This will be done for all the features
+        
+    3. Pooling
+        - Shirk the image to a smaller size
+        - Pick Window size (Usually 2 or 3)
+        - Pick a stride (usually 2)
+        - Walk your window across filtered image
+        - From each window, take max value
+        - like 2x2 and take the max and map to smaller array 11:02
+        - 
+    4. Fully Connected
+    Stacking up the Layers  
+
+
+
+
