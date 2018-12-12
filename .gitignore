@@ -108,3 +108,7 @@ venv.bak/
 
 # MacOS Extra Files
 .DS_Store
+
+# Tensorflow Data
+*.tfrecords
+*_model/

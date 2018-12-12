@@ -1,5 +1,3 @@
-from random import shuffle
-import glob
 import sys
 
 import tensorflow as tf
@@ -82,34 +80,3 @@ def createDataRecord(record_filename, image_files, labels, average_image_size, i
 
 ### Example to show how loading image works with resizing ###
 #load_image("chest_xray/train/NORMAL/IM-0115-0001.jpeg", average_image_size(["chest_xray/train/NORMAL/IM-0115-0001.jpeg"]), 0.25, custom_resize=(512, 512)).show()
-# Parameters for % files in training / testing / validating sets
-train = 0.7
-test = 0.2
-# The regex for the training set
-dataset_dir = "chest_xray/*/*/*.jpeg"
-# List of all training data shuffled
-dataset_files = glob.glob(dataset_dir)
-shuffle(dataset_files)
-# List of all labels according to training data
-### NOTE: 0 = normal 1 = pmneumonia ###
-labels = [0 if 'NORMAL' in filename else 1 for filename in dataset_files]
-
-# Split up dataset into training / testing / validating sets
-dataset_length = len(dataset_files)
-train_end = int(train * dataset_length)
-test_end = train_end + int(test * dataset_length)
-
-train_set = dataset_files[0:train_end]
-train_labels = labels[0:train_end]
-test_set = dataset_files[train_end:test_end]
-test_labels = labels[train_end:test_end]
-val_set = dataset_files[test_end:dataset_length]
-val_labels = labels[test_end:dataset_length]
-
-print("Training: {} images Testing: {} images Validation: {} images".format(len(train_set), len(test_set), len(val_set)))
-# Average image width / height for the whole dataset
-average_image_dims = average_image_size(dataset_files)
-# Create TFRecord files to easily import into Tensorflow for each dataset
-createDataRecord('train.tfrecords', train_set, train_labels, average_image_dims, image_reduction=0.25, custom_resize=(512, 512))
-createDataRecord('test.tfrecords', test_set, test_labels, average_image_dims, image_reduction=0.25, custom_resize=(512, 512))
-createDataRecord('val.tfrecords', val_set, val_labels, average_image_dims, image_reduction=0.25, custom_resize=(512, 512))
