@@ -105,3 +105,6 @@ venv.bak/
 
 # Jetbrains Configuration Files
 *.idea/*
+
+# MacOS Extra Files
+.DS_Store
