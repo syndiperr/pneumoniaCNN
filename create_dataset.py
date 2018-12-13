@@ -1,6 +1,7 @@
-import sys
+import os, sys
 
 import tensorflow as tf
+import numpy as np
 from PIL import Image
 
 
@@ -41,7 +42,7 @@ def load_image(filename, average_image_size, reduce=0.0, custom_resize=(0,0)):
         cropped = image.crop((left, top, right, bottom))
         result = cropped.resize((scaled_width, scaled_height)) if custom_resize[0] is 0 and custom_resize[1] is 0 else cropped.resize(custom_resize)
 
-    return result
+    return np.array(result)
 
 
 def createDataRecord(record_filename, image_files, labels, average_image_size, image_reduction=0.0, custom_resize=(0,0), print_every=500):
@@ -61,7 +62,7 @@ def createDataRecord(record_filename, image_files, labels, average_image_size, i
                 print("{} data: {}/{} saved.".format(dataset_type, i, number_files))
                 sys.stdout.flush()
 
-            # Load the image
+            # Load the image as NumPy Array
             image = load_image(image_files[i], average_image_size, reduce=image_reduction, custom_resize=custom_resize)
             label = labels[i]
             if image is None:
@@ -69,7 +70,7 @@ def createDataRecord(record_filename, image_files, labels, average_image_size, i
 
             # Create a feature
             feature = {
-                "image_raw": _bytes_feature(image.tobytes()),
+                "image_raw": _bytes_feature(image.tostring()),
                 "label": _int64_feature(label)
             }
             # Create an example protocol buffer
@@ -78,5 +79,38 @@ def createDataRecord(record_filename, image_files, labels, average_image_size, i
             writer.write(example.SerializeToString())
     sys.stdout.flush()
 
-### Example to show how loading image works with resizing ###
-#load_image("chest_xray/train/NORMAL/IM-0115-0001.jpeg", average_image_size(["chest_xray/train/NORMAL/IM-0115-0001.jpeg"]), 0.25, custom_resize=(512, 512)).show()
+
+def convertToDataset(file_pattern, labels, image_size=(252, 252), keep_percent=1.0, shuffle=False, batch_size=64, num_epochs=None, buffer_size=2048, prefetch_buffer_size=None):
+    table = tf.contrib.lookup.index_table_from_tensor(mapping=tf.constant(labels))
+    num_classes = len(labels)
+
+    def _map_func(image_file):
+        label = tf.string_split([image_file], delimiter=os.sep).values[-2]
+        image = tf.image.decode_jpeg(tf.read_file(image_file), channels=3)
+        image = tf.image.convert_image_dtype(image, dtype=tf.float32)
+        image = tf.image.central_crop(image, central_fraction=keep_percent)
+        image = tf.image.resize_images(image, size=image_size)
+        return (image, tf.one_hot(table.lookup(label), num_classes))
+
+    dataset = tf.data.Dataset.list_files(file_pattern, shuffle=shuffle)
+
+    if num_epochs is not None and shuffle:
+        dataset = dataset.apply(
+            tf.contrib.data.shuffle_and_repeat(buffer_size, num_epochs)
+        )
+    elif shuffle:
+        dataset = dataset.shuffle(buffer_size)
+    elif num_epochs is not None:
+        dataset = dataset.repeat(num_epochs)
+
+    dataset = dataset.apply(
+        tf.contrib.data.map_and_batch(map_func=_map_func, batch_size=batch_size, num_parallel_calls=os.cpu_count())
+    )
+    dataset = dataset.prefetch(buffer_size=prefetch_buffer_size)
+
+    return dataset
+
+
+if __name__ == "__main__":
+    ### Example to show how loading image works with resizing ###
+    Image.fromarray(load_image("chest_xray/train/NORMAL/IM-0115-0001.jpeg", average_image_size(["chest_xray/train/NORMAL/IM-0115-0001.jpeg"]), 0.25, custom_resize=(252, 252))).show()
