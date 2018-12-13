@@ -44,7 +44,7 @@ def load_image(filename, average_image_size, reduce=0.0, custom_resize=(0,0)):
     return result
 
 
-def createDataRecord(record_filename, image_files, labels, average_image_size, image_reduction=1.0, custom_resize=(0,0), print_every=500):
+def createDataRecord(record_filename, image_files, labels, average_image_size, image_reduction=0.0, custom_resize=(0,0), print_every=500):
     # Open a TFRecord file
     with tf.python_io.TFRecordWriter(record_filename) as writer:
         number_files = len(image_files)

@@ -1,3 +1,4 @@
+import os
 from random import shuffle
 import glob
 
@@ -5,9 +6,10 @@ import tensorflow as tf
 
 from create_dataset import *
 
-DEFAULT_IMAGE_SIZE = 512
+IMAGE_SIZE = 224
 NUM_CHANNELS = 1
 NUM_CLASSES = 2
+REPLACE_DATA = True
 
 
 def parser(record):
@@ -15,28 +17,38 @@ def parser(record):
         "image_raw": tf.FixedLenFeature([], tf.string),
         "label": tf.FixedLenFeature([], tf.int64)
     }
-    parsed = tf.parse_single_example(record, keys_to_feature)
+    parsed = tf.parse_single_example(serialized=record, features=keys_to_feature)
     image = tf.decode_raw(parsed["image_raw"], tf.uint8)
     image = tf.cast(image, tf.float32)
     label = tf.cast(parsed["label"], tf.int32)
 
-    return { "image": image }, label
+    return image, label
 
 
 def train_input_fn():
-    return input_fn(filenames=["train.tfrecords", "test.tfrecords"])
+    return input_fn(filenames=["train.tfrecords", "test.tfrecords"], train=True)
 
 
 def eval_input_fn():
-    return input_fn(filenames=["val.tfrecords"])
+    return input_fn(filenames=["val.tfrecords"], train=False)
 
 
-def input_fn(filenames):
-    dataset = tf.data.TFRecordDataset(filenames=filenames, num_parallel_reads=40)
-    dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(1024, 1))
-    dataset = dataset.apply(tf.contrib.data.map_and_batch(parser, 32))
+def input_fn(filenames, train, batch_size=32, buffer_size=1024):
+    dataset = tf.data.TFRecordDataset(filenames=filenames)
+    dataset = dataset.map(parser)
 
-    return dataset.prefetch(buffer_size=2)
+    if train:
+        dataset = dataset.shuffle(buffer_size)
+        num_repeat = None
+    else:
+        num_repeat = 1
+
+    dataset = dataset.repeat(num_repeat)
+    dataset = dataset.batch(batch_size)
+    iter = dataset.make_one_shot_iterator()
+    images_batch, labels_batch = iter.get_next()
+
+    return {'image': images_batch}, labels_batch
 
 
 def model_fn(features, labels, mode, params):
@@ -100,22 +112,30 @@ if __name__ == '__main__':
     # Split up dataset into training / testing / validating sets
     dataset_length = len(dataset_files)
     train_end = int(train * dataset_length)
-    test_end = train_end + int(test * dataset_length)
+    test_end = int((train+test) * dataset_length)
 
     train_set = dataset_files[0:train_end]
     train_labels = labels[0:train_end]
     test_set = dataset_files[train_end:test_end]
     test_labels = labels[train_end:test_end]
-    val_set = dataset_files[test_end:dataset_length]
-    val_labels = labels[test_end:dataset_length]
+    val_set = dataset_files[test_end:]
+    val_labels = labels[test_end:]
 
     print("Training: {} images Testing: {} images Validation: {} images".format(len(train_set), len(test_set), len(val_set)))
     # Average image width / height for the whole dataset
     average_image_dims = average_image_size(dataset_files)
+    custom_image_size = (IMAGE_SIZE, IMAGE_SIZE)
     # Create TFRecord files to easily import into Tensorflow for each dataset
-    createDataRecord('train.tfrecords', train_set, train_labels, average_image_dims, image_reduction=0.25, custom_resize=(512, 512))
-    createDataRecord('test.tfrecords', test_set, test_labels, average_image_dims, image_reduction=0.25, custom_resize=(512, 512))
-    createDataRecord('val.tfrecords', val_set, val_labels, average_image_dims, image_reduction=0.25, custom_resize=(512, 512))
+    list_files = os.listdir()
+    print("List of files in directory: ", list_files)
+    if "train.tfrecords" not in list_files or REPLACE_DATA:
+        createDataRecord('train.tfrecords', train_set, train_labels, average_image_dims, image_reduction=0.25, custom_resize=custom_image_size)
+
+    if "test.tfrecords" not in list_files or REPLACE_DATA:
+        createDataRecord('test.tfrecords', test_set, test_labels, average_image_dims, image_reduction=0.25, custom_resize=custom_image_size)
+
+    if "val.tfrecords" not in list_files or REPLACE_DATA:
+        createDataRecord('val.tfrecords', val_set, val_labels, average_image_dims, image_reduction=0.25, custom_resize=custom_image_size)
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
