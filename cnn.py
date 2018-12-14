@@ -1,3 +1,5 @@
+import os
+import glob
 import time
 
 import tensorflow as tf
@@ -118,12 +120,31 @@ def cnn_sequential_model(height, width, channels):
     return net
 
 
+def static_vars(**kwargs):
+    def decorate(func):
+        for k in kwargs:
+            setattr(func, k, kwargs[k])
+
+        return func
+
+    return decorate
+
+
+@static_vars(stream_vars=None)
+def auc_roc(y_true, y_pred):
+    value, update_op = tf.contribu.metrics.stream_auc(y_pred, y_true, curve='ROC', name='auc_roc')
+    auc_roc.stream_vars = [i for i in tf.local_variables() if i.name.split('/')[0] == 'auc_roc']
+
+    return control_flow_ops.with_dependencies([update_op], value)
+
+
 if __name__ == '__main__':
     tf.logging.set_verbosity(2)
     # Pattern for train images
     train_dir = "chest_xray/train/*/*.jpeg"
     # Pattern for predicting images
     test_dir = "chest_xray/test/*/*.jpeg"
+    print(len(glob.glob(test_dir)))
     # Pattern for val images
     val_dir = "chest_xray/val/*/*.jpeg"
     # Total available labels in data
@@ -136,17 +157,17 @@ if __name__ == '__main__':
     model.compile(
         loss=tf.keras.losses.categorical_crossentropy,
         optimizer=tf.train.AdamOptimizer(learning_rate=0.001),
-        metrics=['accuracy']
+        metrics=['categorical_crossentropy', 'accuracy']
     )
     # Set up for distributed GPU work
-    strategy = None
-    # strategy = tf.contrib.distribute.MirroredStrategy(num_gpus=3)
+    #strategy = None
+    strategy = tf.contrib.distribute.MirroredStrategy(num_gpus=3)
     config = tf.estimator.RunConfig(model_dir="./model_ckpt/", train_distribute=strategy)
     estimator = tf.keras.estimator.model_to_estimator(model, config=config)
 
     time_hist = TimeHistory()
 
-    BATCH_SIZE = 64
+    BATCH_SIZE = 64 * 3
     NUM_EPOCHS = 1000
     estimator.train(
         input_fn=lambda: convertToDataset(
@@ -161,6 +182,17 @@ if __name__ == '__main__':
         ),
         hooks=[time_hist]
     )
+    predict = estimator.predict(
+        input_fn=lambda: convertToDataset(
+            test_dir,
+            labels,
+            shuffle=True,
+            keep_percent=1 - 0.2,
+            buffer_size=2048,
+            num_epochs=1
+        )
+    )
+
     estimator.evaluate(
         input_fn=lambda: convertToDataset(
             val_dir,
