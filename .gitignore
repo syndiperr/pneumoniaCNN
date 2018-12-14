@@ -112,3 +112,4 @@ venv.bak/
 # Tensorflow Data
 *.tfrecords
 *_model/
+*_ckpt/
